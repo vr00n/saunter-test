@@ -124,7 +124,7 @@ recordBtn.onclick = async () => {
                 const data = await resp.json();
                 if (data.link) {
                     const recId = data.link.split('/').pop();
-                    statusDiv.innerHTML = `Upload successful! <a href="/play/${recId}">View Recording</a>`;
+                    statusDiv.innerHTML = `Upload successful! <a href="${BACKEND_URL}/play/${recId}">View Recording</a>`;
                     loadRecordings();
                 } else {
                     statusDiv.textContent = 'Upload failed: No link returned.';
@@ -152,7 +152,7 @@ function loadRecordings() {
         list.forEach(r => {
             const a = document.createElement('a');
             const recId = r.link.split('/').pop();
-            a.href = `/play/${recId}`;
+            a.href = `${BACKEND_URL}/play/${recId}`;
             a.textContent = r.name;
             a.className = 'recording-link';
             recDiv.appendChild(a);
