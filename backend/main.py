@@ -182,3 +182,7 @@ def get_locations(rec_id: str):
     except Exception as e:
         print(f"Error serving locations for {rec_id}: {str(e)}")
         return JSONResponse({"error": f"Error serving locations: {str(e)}"}, status_code=500)
+
+@app.get("/record.html", response_class=HTMLResponse)
+def record(request: Request):
+    return templates.TemplateResponse("record.html", {"request": request})
