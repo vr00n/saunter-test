@@ -59,11 +59,17 @@ def get_from_github(path):
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
     }
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        content = response.json()["content"]
-        return base64.b64decode(content)
-    return None
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            # GitHub API returns content in base64, but it might be encoded with newlines
+            content = response.json()["content"].replace('\n', '')
+            return base64.b64decode(content)
+        print(f"GitHub API error: {response.status_code} - {response.text}")
+        return None
+    except Exception as e:
+        print(f"Error fetching from GitHub: {str(e)}")
+        return None
 
 @app.post('/upload_audio')
 async def upload_audio(audio: UploadFile = File(...), locations: str = Form(...)):
@@ -111,7 +117,7 @@ def get_audio(rec_id: str):
     audio_content = get_from_github(f"recordings/{rec_id}.webm")
     if audio_content:
         return FileResponse(io.BytesIO(audio_content), media_type='audio/webm')
-    return JSONResponse({"error": "Audio not found"}, status_code=404)
+    return JSONResponse({"error": "Audio not found or error accessing GitHub"}, status_code=404)
 
 @app.get('/locations/{rec_id}')
 def get_locations(rec_id: str):
