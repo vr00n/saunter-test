@@ -90,6 +90,21 @@ recordBtn.onclick = async () => {
             statusDiv.textContent = 'Audio recording not supported.';
             return;
         }
+        if (!window.MediaRecorder) {
+            statusDiv.textContent = 'MediaRecorder not supported on this device.';
+            return;
+        }
+        let mimeType = '';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+            mimeType = 'audio/wav';
+        } else {
+            statusDiv.textContent = 'No supported audio format found for recording.';
+            return;
+        }
         statusDiv.textContent = 'Recording started...';
         mediaRecorder = null;
         audioChunks = [];
@@ -103,13 +118,17 @@ recordBtn.onclick = async () => {
         startLocation();
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus',
+            mimeType: mimeType,
             audioBitsPerSecond: 128000
         });
         mediaRecorder.ondataavailable = e => {
             if (e.data.size > 0) {
                 audioChunks.push(e.data);
             }
+        };
+        mediaRecorder.onerror = function(e) {
+            console.error('MediaRecorder error:', e);
+            statusDiv.textContent = 'Recording error: ' + (e.error && e.error.name ? e.error.name : e);
         };
         mediaRecorder.onstop = async () => {
             clearInterval(timerInt);
@@ -119,15 +138,13 @@ recordBtn.onclick = async () => {
             document.getElementById('recordIcon').textContent = '●';
             recording = false;
             statusDiv.textContent = 'Recording stopped. Preparing upload...';
-            
             // Stop all tracks in the stream
             stream.getTracks().forEach(track => track.stop());
-            
             // Upload
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+            const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log('Audio blob size:', audioBlob.size);
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('audio', audioBlob, 'recording.' + mimeType.split('/')[1]);
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
             try {
@@ -153,7 +170,12 @@ recordBtn.onclick = async () => {
     } else {
         // Stop recording
         statusDiv.textContent = 'Stopping recording...';
-        mediaRecorder.stop();
+        try {
+            mediaRecorder.stop();
+        } catch (err) {
+            console.error('Error stopping MediaRecorder:', err);
+            statusDiv.textContent = 'Error stopping recording: ' + (err.message || err);
+        }
     }
 };
 
