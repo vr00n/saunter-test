@@ -69,7 +69,7 @@ recordBtn.onclick = async () => {
             statusDiv.textContent = 'Audio recording not supported.';
             return;
         }
-        statusDiv.textContent = '';
+        statusDiv.textContent = 'Recording started...';
         mediaRecorder = null;
         audioChunks = [];
         seconds = 0;
@@ -90,24 +90,31 @@ recordBtn.onclick = async () => {
             recordBtn.classList.remove('recording');
             document.getElementById('recordIcon').textContent = '●';
             recording = false;
+            statusDiv.textContent = 'Recording stopped. Preparing upload...';
             // Upload
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const formData = new FormData();
             formData.append('audio', audioBlob, 'recording.webm');
             formData.append('locations', JSON.stringify(locations));
-            statusDiv.textContent = 'Uploading...';
-            const resp = await fetch('/upload_audio', { method: 'POST', body: formData });
-            const data = await resp.json();
-            if (data.link) {
-                statusDiv.innerHTML = `Uploaded! <a href="${data.link}">View Recording</a>`;
-                loadRecordings();
-            } else {
-                statusDiv.textContent = 'Upload failed.';
+            statusDiv.textContent = 'Uploading audio and location data...';
+            try {
+                const resp = await fetch('/upload_audio', { method: 'POST', body: formData });
+                statusDiv.textContent = 'Waiting for server response...';
+                const data = await resp.json();
+                if (data.link) {
+                    statusDiv.innerHTML = `Upload successful! <a href="${data.link}">View Recording</a>`;
+                    loadRecordings();
+                } else {
+                    statusDiv.textContent = 'Upload failed: No link returned.';
+                }
+            } catch (err) {
+                statusDiv.textContent = 'Upload failed: ' + (err.message || err);
             }
         };
         mediaRecorder.start();
     } else {
         // Stop recording
+        statusDiv.textContent = 'Stopping recording...';
         mediaRecorder.stop();
     }
 };
