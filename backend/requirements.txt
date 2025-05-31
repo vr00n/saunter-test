@@ -7,3 +7,8 @@ selenium
 pillow
 numpy
 python-multipart 
+fastapi
+uvicorn
+python-multipart
+requests
+python-dotenv
