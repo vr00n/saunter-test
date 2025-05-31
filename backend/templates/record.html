@@ -97,6 +97,10 @@ recordBtn.onclick = async () => {
         let mimeType = '';
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
             mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+            mimeType = 'audio/wav';
         } else {
             statusDiv.textContent = 'No supported audio format found for recording.';
             return;
@@ -147,7 +151,7 @@ recordBtn.onclick = async () => {
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log('Audio blob size:', audioBlob.size);
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('audio', audioBlob, 'recording.' + mimeType.split('/')[1]);
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
             try {
@@ -159,7 +163,7 @@ recordBtn.onclick = async () => {
                 const data = await resp.json();
                 if (data.link) {
                     const recId = data.link.split('/').pop();
-                    statusDiv.innerHTML = `Upload successful! <a href=\"${BACKEND_URL}/play/${recId}\">View Recording</a>`;
+                    statusDiv.innerHTML = `Upload successful! <a href="${BACKEND_URL}/play/${recId}">View Recording</a>`;
                     loadRecordings();
                 } else {
                     statusDiv.textContent = 'Upload failed: No link returned.';
@@ -218,4 +222,4 @@ window.onload = loadRecordings;
 v1.0.0
 </div>
 </body>
-</html>
+</html> 
