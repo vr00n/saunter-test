@@ -98,7 +98,7 @@ recordBtn.onclick = async () => {
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
             try {
-                const resp = await fetch('/upload_audio', { method: 'POST', body: formData });
+                const resp = await fetch('https://saunter-test.onrender.com/upload_audio', { method: 'POST', body: formData });
                 statusDiv.textContent = 'Waiting for server response...';
                 const data = await resp.json();
                 if (data.link) {
@@ -139,5 +139,8 @@ function loadRecordings() {
 
 window.onload = loadRecordings;
 </script>
+<div style="position: fixed; bottom: 10px; right: 16px; color: #888; font-size: 0.95em; opacity: 0.8; z-index: 999;">
+v1.0.0
+</div>
 </body>
 </html> 
