@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio + Location Recorder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; font-family: 'Segoe UI', Arial, sans-serif; }
+        .recorder-container { max-width: 400px; margin: 2em auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 16px #0001; padding: 2em 1.5em; text-align: center; }
+        .record-btn { width: 100px; height: 100px; border-radius: 50%; font-size: 2em; border: none; background: #dc3545; color: #fff; margin: 1em 0; box-shadow: 0 2px 8px #dc354533; transition: background 0.2s; }
+        .record-btn.recording { background: #28a745; }
+        .timer { font-size: 1.5em; margin-bottom: 0.5em; }
+        .recording-indicator { color: #dc3545; font-weight: bold; margin-bottom: 1em; }
+        .recordings-list { margin-top: 2em; }
+        .recording-link { display: block; margin-bottom: 0.5em; }
+    </style>
+</head>
+<body>
+<div class="recorder-container">
+    <h3>Audio + Location Recorder</h3>
+    <div id="status"></div>
+    <div class="timer" id="timer">00:00</div>
+    <button id="recordBtn" class="record-btn"><span id="recordIcon">●</span></button>
+    <div class="recording-indicator" id="recInd" style="display:none;">Recording...</div>
+    <input type="file" id="audioUpload" accept="audio/*" style="display:none;">
+    <div class="recordings-list">
+        <h5>Your Recordings</h5>
+        <div id="recordings"></div>
+    </div>
+</div>
+<script>
+let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [];
+const recordBtn = document.getElementById('recordBtn');
+const timer = document.getElementById('timer');
+const recInd = document.getElementById('recInd');
+const statusDiv = document.getElementById('status');
+
+function updateTimer() {
+    seconds++;
+    const m = String(Math.floor(seconds/60)).padStart(2,'0');
+    const s = String(seconds%60).padStart(2,'0');
+    timer.textContent = `${m}:${s}`;
+}
+
+function startLocation() {
+    locations = [];
+    geoInt = setInterval(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                locations.push({
+                    timestamp: Date.now(),
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude
+                });
+            });
+        }
+    }, 2000);
+}
+
+function stopLocation() {
+    clearInterval(geoInt);
+}
+
+recordBtn.onclick = async () => {
+    if (!recording) {
+        // Start recording
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            statusDiv.textContent = 'Audio recording not supported.';
+            return;
+        }
+        statusDiv.textContent = '';
+        mediaRecorder = null;
+        audioChunks = [];
+        seconds = 0;
+        timer.textContent = '00:00';
+        recInd.style.display = 'block';
+        recordBtn.classList.add('recording');
+        document.getElementById('recordIcon').textContent = '■';
+        recording = true;
+        timerInt = setInterval(updateTimer, 1000);
+        startLocation();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+            clearInterval(timerInt);
+            stopLocation();
+            recInd.style.display = 'none';
+            recordBtn.classList.remove('recording');
+            document.getElementById('recordIcon').textContent = '●';
+            recording = false;
+            // Upload
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('locations', JSON.stringify(locations));
+            statusDiv.textContent = 'Uploading...';
+            const resp = await fetch('/upload_audio', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.link) {
+                statusDiv.innerHTML = `Uploaded! <a href="${data.link}">View Recording</a>`;
+                loadRecordings();
+            } else {
+                statusDiv.textContent = 'Upload failed.';
+            }
+        };
+        mediaRecorder.start();
+    } else {
+        // Stop recording
+        mediaRecorder.stop();
+    }
+};
+
+function loadRecordings() {
+    fetch('/list_recordings').then(r => r.json()).then(list => {
+        const recDiv = document.getElementById('recordings');
+        recDiv.innerHTML = '';
+        if (!list.length) {
+            recDiv.textContent = 'No recordings yet.';
+            return;
+        }
+        list.forEach(r => {
+            const a = document.createElement('a');
+            a.href = r.link;
+            a.textContent = r.name;
+            a.className = 'recording-link';
+            recDiv.appendChild(a);
+        });
+    });
+}
+
+window.onload = loadRecordings;
+</script>
+</body>
+</html> 
