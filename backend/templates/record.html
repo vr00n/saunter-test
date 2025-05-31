@@ -29,9 +29,25 @@
         <div id="recordings"></div>
     </div>
 </div>
-<!-- Load configuration first -->
-<script src="/config.js"></script>
 <script>
+// Configuration
+const config = {
+    backend: {
+        url: '',
+        overrides: {
+            'localhost': 'http://localhost:8000',
+            '127.0.0.1': 'http://localhost:8000',
+            'vr00n.github.io': 'https://saunter-test.onrender.com'
+        }
+    }
+};
+
+// Get the current hostname and set backend URL
+const hostname = window.location.hostname;
+if (config.backend.overrides[hostname]) {
+    config.backend.url = config.backend.overrides[hostname];
+}
+
 // Use the configured backend URL
 const BACKEND_URL = config.backend.url;
 
