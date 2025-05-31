@@ -29,8 +29,11 @@
         <div id="recordings"></div>
     </div>
 </div>
+<!-- Load configuration first -->
+<script src="config.js"></script>
 <script>
-const BACKEND_URL = 'https://saunter-test.onrender.com';  // Point to Render backend
+// Use the configured backend URL
+const BACKEND_URL = config.backend.url;
 
 let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [];
 const recordBtn = document.getElementById('recordBtn');
