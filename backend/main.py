@@ -5,7 +5,7 @@ import json
 import base64
 import io
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -150,15 +150,13 @@ def get_audio(rec_id: str):
         
         if audio_content:
             print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes")
-            # Create a BytesIO object and set the position to the beginning
             audio_io = io.BytesIO(audio_content)
             audio_io.seek(0)
-            return FileResponse(
+            return StreamingResponse(
                 audio_io,
                 media_type='audio/webm;codecs=opus',
-                filename=f"{rec_id}.webm"
+                headers={"Content-Disposition": f"attachment; filename={rec_id}.webm"}
             )
-            
         print(f"Audio content not found for {rec_id}")
         return JSONResponse(
             {"error": "Audio not found. Please check if the recording exists."}, 
