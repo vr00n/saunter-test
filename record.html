@@ -95,14 +95,10 @@ recordBtn.onclick = async () => {
             return;
         }
         let mimeType = '';
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-            mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-            mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+        if (MediaRecorder.isTypeSupported('audio/wav')) {
             mimeType = 'audio/wav';
         } else {
-            statusDiv.textContent = 'No supported audio format found for recording.';
+            statusDiv.textContent = 'WAV recording not supported on this device/browser.';
             return;
         }
         statusDiv.textContent = 'Recording started...';
@@ -151,7 +147,7 @@ recordBtn.onclick = async () => {
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log('Audio blob size:', audioBlob.size);
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.' + mimeType.split('/')[1]);
+            formData.append('audio', audioBlob, 'recording.wav');
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
             try {
