@@ -60,11 +60,31 @@ def get_from_github(path):
         "Authorization": f"token {GITHUB_TOKEN}",
     }
     try:
+        print(f"Fetching from GitHub: {path}")
         response = requests.get(url, headers=headers)
+        print(f"GitHub API response status: {response.status_code}")
+        
         if response.status_code == 200:
-            # GitHub API returns content in base64, but it might be encoded with newlines
-            content = response.json()["content"].replace('\n', '')
-            return base64.b64decode(content)
+            try:
+                content_data = response.json()
+                if 'content' not in content_data:
+                    print(f"No content field in GitHub response: {content_data}")
+                    return None
+                    
+                # GitHub API returns content in base64, but it might be encoded with newlines
+                content = content_data['content'].replace('\n', '')
+                print(f"Decoding base64 content of length: {len(content)}")
+                decoded_content = base64.b64decode(content)
+                print(f"Successfully decoded content of size: {len(decoded_content)} bytes")
+                return decoded_content
+            except json.JSONDecodeError as e:
+                print(f"Failed to parse GitHub response as JSON: {str(e)}")
+                print(f"Response text: {response.text[:200]}...")  # Print first 200 chars
+                return None
+            except base64.binascii.Error as e:
+                print(f"Failed to decode base64 content: {str(e)}")
+                return None
+                
         print(f"GitHub API error: {response.status_code} - {response.text}")
         return None
     except Exception as e:
@@ -125,7 +145,9 @@ def play_recording(request: Request, rec_id: str):
 def get_audio(rec_id: str):
     try:
         print(f"Fetching audio for recording {rec_id}")
-        audio_content = get_from_github(f"recordings/{rec_id}.webm")
+        audio_path = f"recordings/{rec_id}.webm"
+        audio_content = get_from_github(audio_path)
+        
         if audio_content:
             print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes")
             # Create a BytesIO object and set the position to the beginning
@@ -136,11 +158,18 @@ def get_audio(rec_id: str):
                 media_type='audio/webm;codecs=opus',
                 filename=f"{rec_id}.webm"
             )
+            
         print(f"Audio content not found for {rec_id}")
-        return JSONResponse({"error": "Audio not found. Please check if the recording exists."}, status_code=404)
+        return JSONResponse(
+            {"error": "Audio not found. Please check if the recording exists."}, 
+            status_code=404
+        )
     except Exception as e:
         print(f"Error serving audio for {rec_id}: {str(e)}")
-        return JSONResponse({"error": f"Error serving audio: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            {"error": f"Error serving audio: {str(e)}"}, 
+            status_code=500
+        )
 
 @app.get('/locations/{rec_id}')
 def get_locations(rec_id: str):
