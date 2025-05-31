@@ -30,6 +30,8 @@
     </div>
 </div>
 <script>
+const BACKEND_URL = 'https://saunter-test.onrender.com';
+
 let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [];
 const recordBtn = document.getElementById('recordBtn');
 const timer = document.getElementById('timer');
@@ -98,7 +100,7 @@ recordBtn.onclick = async () => {
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
             try {
-                const resp = await fetch('https://saunter-test.onrender.com/upload_audio', { method: 'POST', body: formData });
+                const resp = await fetch(`${BACKEND_URL}/upload_audio`, { method: 'POST', body: formData });
                 statusDiv.textContent = 'Waiting for server response...';
                 const data = await resp.json();
                 if (data.link) {
@@ -120,7 +122,7 @@ recordBtn.onclick = async () => {
 };
 
 function loadRecordings() {
-    fetch('/list_recordings').then(r => r.json()).then(list => {
+    fetch(`${BACKEND_URL}/list_recordings`).then(r => r.json()).then(list => {
         const recDiv = document.getElementById('recordings');
         recDiv.innerHTML = '';
         if (!list.length) {
