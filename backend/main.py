@@ -3,13 +3,16 @@ import uuid
 import requests
 import json
 import base64
+import io
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
+
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
@@ -20,6 +23,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # GitHub API URL and credentials from environment variables
 GITHUB_API_URL = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -30,37 +34,73 @@ GITHUB_REPO = os.getenv("GITHUB_REPO")
 if not all([GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO]):
     raise ValueError("Missing required environment variables: GITHUB_TOKEN, GITHUB_OWNER, or GITHUB_REPO")
 
-UPLOAD_AUDIO_DIR = 'uploads/audio'
-UPLOAD_LOC_DIR = 'uploads/locations'
-os.makedirs(UPLOAD_AUDIO_DIR, exist_ok=True)
-os.makedirs(UPLOAD_LOC_DIR, exist_ok=True)
-
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+def upload_to_github(content, path):
+    """Upload content to GitHub"""
+    content_base64 = base64.b64encode(content).decode("utf-8")
+    url = GITHUB_API_URL.format(owner=GITHUB_OWNER, repo=GITHUB_REPO, path=path)
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "message": f"Upload {path}",
+        "content": content_base64,
+    }
+    response = requests.put(url, headers=headers, data=json.dumps(data))
+    return response.status_code == 201 or response.status_code == 200
+
+def get_from_github(path):
+    """Get content from GitHub"""
+    url = GITHUB_API_URL.format(owner=GITHUB_OWNER, repo=GITHUB_REPO, path=path)
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        content = response.json()["content"]
+        return base64.b64decode(content)
+    return None
+
 @app.post('/upload_audio')
 async def upload_audio(audio: UploadFile = File(...), locations: str = Form(...)):
     rec_id = str(uuid.uuid4())
-    audio_path = os.path.join(UPLOAD_AUDIO_DIR, f'{rec_id}.webm')
-    loc_path = os.path.join(UPLOAD_LOC_DIR, f'{rec_id}.json')
-    with open(audio_path, 'wb') as f:
-        f.write(await audio.read())
-    with open(loc_path, 'w') as f:
-        f.write(locations)
+    audio_path = f"recordings/{rec_id}.webm"
+    loc_path = f"recordings/{rec_id}.json"
+    
+    # Upload audio to GitHub
+    audio_content = await audio.read()
+    if not upload_to_github(audio_content, audio_path):
+        return JSONResponse({"error": "Failed to upload audio"}, status_code=500)
+    
+    # Upload locations to GitHub
+    if not upload_to_github(locations.encode('utf-8'), loc_path):
+        return JSONResponse({"error": "Failed to upload locations"}, status_code=500)
+    
     return {"link": f"/play/{rec_id}"}
 
 @app.get('/list_recordings')
 def list_recordings():
-    recs = []
-    for fname in os.listdir(UPLOAD_AUDIO_DIR):
-        if fname.endswith('.webm'):
-            rec_id = fname[:-5]
-            recs.append({
-                'name': f'Recording {rec_id[:8]}',
-                'link': f'/play/{rec_id}'
-            })
-    return recs
+    url = GITHUB_API_URL.format(owner=GITHUB_OWNER, repo=GITHUB_REPO, path="recordings")
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        files = response.json()
+        recs = []
+        for file in files:
+            if file['name'].endswith('.webm'):
+                rec_id = file['name'][:-5]
+                recs.append({
+                    'name': f'Recording {rec_id[:8]}',
+                    'link': f'/play/{rec_id}'
+                })
+        return recs
+    return []
 
 @app.get('/play/{rec_id}', response_class=HTMLResponse)
 def play_recording(request: Request, rec_id: str):
@@ -68,16 +108,14 @@ def play_recording(request: Request, rec_id: str):
 
 @app.get('/audio/{rec_id}')
 def get_audio(rec_id: str):
-    audio_path = os.path.join(UPLOAD_AUDIO_DIR, f'{rec_id}.webm')
-    if not os.path.exists(audio_path):
-        return JSONResponse({"error": "Audio not found"}, status_code=404)
-    return FileResponse(audio_path, media_type='audio/webm')
+    audio_content = get_from_github(f"recordings/{rec_id}.webm")
+    if audio_content:
+        return FileResponse(io.BytesIO(audio_content), media_type='audio/webm')
+    return JSONResponse({"error": "Audio not found"}, status_code=404)
 
 @app.get('/locations/{rec_id}')
 def get_locations(rec_id: str):
-    loc_path = os.path.join(UPLOAD_LOC_DIR, f'{rec_id}.json')
-    if not os.path.exists(loc_path):
-        return JSONResponse({"error": "Locations not found"}, status_code=404)
-    with open(loc_path) as f:
-        data = f.read()
-    return JSONResponse(content=data)
+    locations_content = get_from_github(f"recordings/{rec_id}.json")
+    if locations_content:
+        return JSONResponse(content=locations_content.decode('utf-8'))
+    return JSONResponse({"error": "Locations not found"}, status_code=404)
