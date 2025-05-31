@@ -10,7 +10,7 @@ templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://vr00n.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
