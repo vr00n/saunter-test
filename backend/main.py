@@ -26,6 +26,10 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_OWNER = os.getenv("GITHUB_OWNER")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 
+# Validate required environment variables
+if not all([GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO]):
+    raise ValueError("Missing required environment variables: GITHUB_TOKEN, GITHUB_OWNER, or GITHUB_REPO")
+
 UPLOAD_AUDIO_DIR = 'uploads/audio'
 UPLOAD_LOC_DIR = 'uploads/locations'
 os.makedirs(UPLOAD_AUDIO_DIR, exist_ok=True)
