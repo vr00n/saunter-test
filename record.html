@@ -5,6 +5,7 @@
     <title>Audio + Location Recorder</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/recorder-js@1.0.3/dist/recorder.min.js"></script>
     <style>
         body { background: #f8f9fa; font-family: 'Segoe UI', Arial, sans-serif; }
         .recorder-container { max-width: 400px; margin: 2em auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 16px #0001; padding: 2em 1.5em; text-align: center; }
@@ -51,7 +52,7 @@ if (config.backend.overrides[hostname]) {
 // Use the configured backend URL
 const BACKEND_URL = config.backend.url;
 
-let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [], stream = null;
+let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [], stream = null, recorderJs = null, wavBlob = null;
 const recordBtn = document.getElementById('recordBtn');
 const timer = document.getElementById('timer');
 const recInd = document.getElementById('recInd');
@@ -90,20 +91,15 @@ recordBtn.onclick = async () => {
             statusDiv.textContent = 'Audio recording not supported.';
             return;
         }
-        if (!window.MediaRecorder) {
-            statusDiv.textContent = 'MediaRecorder not supported on this device.';
-            return;
-        }
+        let useMediaRecorder = false;
         let mimeType = '';
-        if (MediaRecorder.isTypeSupported('audio/wav')) {
-            mimeType = 'audio/wav';
-        } else {
-            statusDiv.textContent = 'WAV recording not supported on this device/browser.';
-            return;
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            useMediaRecorder = true;
+            mimeType = 'audio/webm;codecs=opus';
         }
         statusDiv.textContent = 'Recording started...';
-        mediaRecorder = null;
         audioChunks = [];
+        wavBlob = null;
         seconds = 0;
         timer.textContent = '00:00';
         recInd.style.display = 'block';
@@ -113,76 +109,110 @@ recordBtn.onclick = async () => {
         timerInt = setInterval(updateTimer, 1000);
         startLocation();
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: mimeType,
-            audioBitsPerSecond: 128000
-        });
-        mediaRecorder.ondataavailable = e => {
-            if (e.data.size > 0) {
-                audioChunks.push(e.data);
-            }
-        };
-        mediaRecorder.onerror = function(e) {
-            console.error('MediaRecorder error:', e);
-            statusDiv.textContent = 'Recording error: ' + (e.error && e.error.name ? e.error.name : e);
-        };
-        mediaRecorder.onstop = async () => {
-            clearInterval(timerInt);
-            stopLocation();
-            recInd.style.display = 'none';
-            recordBtn.classList.remove('recording');
-            document.getElementById('recordIcon').textContent = '●';
-            recording = false;
-            statusDiv.textContent = 'Recording stopped. Preparing upload...';
-            // Stop all tracks in the stream
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            // Upload only if there is data
-            if (audioChunks.length === 0) {
-                statusDiv.textContent = 'No audio data recorded.';
-                cleanupRecording();
-                return;
-            }
-            const audioBlob = new Blob(audioChunks, { type: mimeType });
-            console.log('Audio blob size:', audioBlob.size);
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.wav');
-            formData.append('locations', JSON.stringify(locations));
-            statusDiv.textContent = 'Uploading audio and location data...';
-            try {
-                const resp = await fetch(`${BACKEND_URL}/upload_audio`, { 
-                    method: 'POST', 
-                    body: formData 
-                });
-                statusDiv.textContent = 'Waiting for server response...';
-                const data = await resp.json();
-                if (data.link) {
-                    const recId = data.link.split('/').pop();
-                    statusDiv.innerHTML = `Upload successful! <a href="${BACKEND_URL}/play/${recId}">View Recording</a>`;
-                    loadRecordings();
-                } else {
-                    statusDiv.textContent = 'Upload failed: No link returned.';
+        if (useMediaRecorder) {
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                audioBitsPerSecond: 128000
+            });
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) {
+                    audioChunks.push(e.data);
                 }
-            } catch (err) {
-                console.error('Upload error:', err);
-                statusDiv.textContent = 'Upload failed: ' + (err.message || err);
-            }
-            cleanupRecording();
-        };
-        mediaRecorder.start(1000); // Collect data every second
+            };
+            mediaRecorder.onerror = function(e) {
+                console.error('MediaRecorder error:', e);
+                statusDiv.textContent = 'Recording error: ' + (e.error && e.error.name ? e.error.name : e);
+            };
+            mediaRecorder.onstop = async () => {
+                clearInterval(timerInt);
+                stopLocation();
+                recInd.style.display = 'none';
+                recordBtn.classList.remove('recording');
+                document.getElementById('recordIcon').textContent = '●';
+                recording = false;
+                statusDiv.textContent = 'Recording stopped. Preparing upload...';
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                if (audioChunks.length === 0) {
+                    statusDiv.textContent = 'No audio data recorded.';
+                    cleanupRecording();
+                    return;
+                }
+                const audioBlob = new Blob(audioChunks, { type: mimeType });
+                uploadRecording(audioBlob, 'webm');
+            };
+            mediaRecorder.start(1000); // Collect data every second
+        } else {
+            // Use Recorder.js for WAV
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const input = audioContext.createMediaStreamSource(stream);
+            recorderJs = new Recorder(input, { numChannels: 1 });
+            recorderJs.record();
+        }
     } else {
         // Stop recording
         statusDiv.textContent = 'Stopping recording...';
         try {
-            mediaRecorder.stop();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            } else if (recorderJs) {
+                recorderJs.stop();
+                recorderJs.exportWAV(async function(blob) {
+                    clearInterval(timerInt);
+                    stopLocation();
+                    recInd.style.display = 'none';
+                    recordBtn.classList.remove('recording');
+                    document.getElementById('recordIcon').textContent = '●';
+                    recording = false;
+                    statusDiv.textContent = 'Recording stopped. Preparing upload...';
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                    if (!blob || blob.size === 0) {
+                        statusDiv.textContent = 'No audio data recorded.';
+                        cleanupRecording();
+                        return;
+                    }
+                    uploadRecording(blob, 'wav');
+                });
+            }
         } catch (err) {
-            console.error('Error stopping MediaRecorder:', err);
+            console.error('Error stopping recorder:', err);
             statusDiv.textContent = 'Error stopping recording: ' + (err.message || err);
             cleanupRecording();
         }
     }
 };
+
+function uploadRecording(audioBlob, ext) {
+    console.log('Audio blob size:', audioBlob.size);
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.' + ext);
+    formData.append('locations', JSON.stringify(locations));
+    statusDiv.textContent = 'Uploading audio and location data...';
+    fetch(`${BACKEND_URL}/upload_audio`, { 
+        method: 'POST', 
+        body: formData 
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        statusDiv.textContent = 'Waiting for server response...';
+        if (data.link) {
+            const recId = data.link.split('/').pop();
+            statusDiv.innerHTML = `Upload successful! <a href="${BACKEND_URL}/play/${recId}">View Recording</a>`;
+            loadRecordings();
+        } else {
+            statusDiv.textContent = 'Upload failed: No link returned.';
+        }
+        cleanupRecording();
+    })
+    .catch(err => {
+        console.error('Upload error:', err);
+        statusDiv.textContent = 'Upload failed: ' + (err.message || err);
+        cleanupRecording();
+    });
+}
 
 function cleanupRecording() {
     mediaRecorder = null;
@@ -191,6 +221,8 @@ function cleanupRecording() {
     seconds = 0;
     timer.textContent = '00:00';
     recording = false;
+    recorderJs = null;
+    wavBlob = null;
 }
 
 function loadRecordings() {
@@ -218,4 +250,4 @@ window.onload = loadRecordings;
 v1.0.0
 </div>
 </body>
-</html> 
+</html>
