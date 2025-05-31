@@ -119,7 +119,7 @@ recordBtn.onclick = async () => {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream, {
             mimeType: mimeType,
-            audioBitsPerSecond: 128000
+            audioBitsPerSecond: 64000
         });
         mediaRecorder.ondataavailable = e => {
             if (e.data.size > 0) {
@@ -154,6 +154,8 @@ recordBtn.onclick = async () => {
             formData.append('audio', audioBlob, 'recording.' + mimeType.split('/')[1]);
             formData.append('locations', JSON.stringify(locations));
             statusDiv.textContent = 'Uploading audio and location data...';
+            // Show a simple progress indicator
+            statusDiv.innerHTML += '<br><span id="uploadProgress">Uploading...</span>';
             try {
                 const resp = await fetch(`${BACKEND_URL}/upload_audio`, { 
                     method: 'POST', 
@@ -172,6 +174,9 @@ recordBtn.onclick = async () => {
                 console.error('Upload error:', err);
                 statusDiv.textContent = 'Upload failed: ' + (err.message || err);
             }
+            // Remove progress indicator
+            const prog = document.getElementById('uploadProgress');
+            if (prog) prog.remove();
             cleanupRecording();
         };
         mediaRecorder.start(1000); // Collect data every second
