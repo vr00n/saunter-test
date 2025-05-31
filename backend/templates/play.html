@@ -10,6 +10,9 @@
         body { background: #f8f9fa; font-family: 'Segoe UI', Arial, sans-serif; }
         .main-container { max-width: 700px; margin: 2em auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 16px #0001; padding: 2em 1.5em; }
         #map { width: 100%; height: 350px; border-radius: 12px; box-shadow: 0 2px 12px #0001; background: #fff; overflow: hidden; margin-bottom: 1.5em; }
+        .locations-bar { margin: 1em 0; display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: center; }
+        .location-pill { padding: 0.4em 1em; border-radius: 20px; background: #e9ecef; color: #333; font-size: 1.05em; transition: background 0.2s, color 0.2s; white-space: nowrap; }
+        .location-pill.active { background: #0074D9; color: #fff; font-weight: bold; box-shadow: 0 2px 8px #0074d933; }
     </style>
 </head>
 <body>
@@ -18,34 +21,32 @@
     <h3 class="mb-3">Playback</h3>
     <audio id="audio" controls style="width:100%; margin-bottom:1em;"></audio>
     <div id="map"></div>
+    <div class="locations-bar" id="locationsBar"></div>
 </div>
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoidnIwMG4tbnljc2J1cyIsImEiOiJjbDViczI0NmMwMW42M2JwYmdubmUwOGJ3In0.YroblDcHdFwFXo38QL0vxQ';
 const rec_id = "{{ rec_id }}";
 const audio = document.getElementById('audio');
-let path = [], map, marker, lastIdx = -1;
+let path = [], map, marker;
 
 function fetchData() {
+    // Fetch audio
     audio.src = `/audio/${rec_id}`;
+    // Fetch locations
     fetch(`/locations/${rec_id}`)
         .then(r => r.json())
         .then(data => {
             try {
-                if (typeof data === 'string') {
-                    path = JSON.parse(data);
-                } else if (Array.isArray(data)) {
-                    path = data;
-                } else {
-                    path = [];
-                }
+                path = JSON.parse(data);
             } catch {
                 path = [];
             }
             if (path.length) {
+                // Normalize timestamps so the first one is zero
+                const t0 = path[0].timestamp;
+                path.forEach(p => p.timestamp -= t0);
                 initMap();
-            } else {
-                document.getElementById('map').innerHTML = '<div class="alert alert-warning">No location data found for this recording.</div>';
+                updateLocationsBar(0);
             }
         });
 }
@@ -55,7 +56,7 @@ function initMap() {
         container: 'map',
         style: 'mapbox://styles/mapbox/streets-v12',
         center: [path[0].lon, path[0].lat],
-        zoom: 15
+        zoom: 13
     });
     marker = new mapboxgl.Marker().setLngLat([path[0].lon, path[0].lat]).addTo(map);
     map.on('load', () => updatePathLine(0));
@@ -86,26 +87,30 @@ function updatePathLine(idx) {
     }
 }
 
+function updateLocationsBar(idx) {
+    const bar = document.getElementById('locationsBar');
+    bar.innerHTML = path.map((p, i) =>
+        `<span class="location-pill${i === idx ? ' active' : ''}">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span>`
+    ).join('');
+    bar.style.display = 'flex';
+}
+
 audio.ontimeupdate = function() {
     if (!path.length) return;
-    const ts = audio.currentTime;
+    const ts = audio.currentTime * 1000; // audio.currentTime is in seconds, locations use ms
+    // Find the last point at or before the current timestamp
     let idx = 0;
     for (let i = 0; i < path.length; i++) {
-        if ((path[i].timestamp / 1000) <= ts) idx = i;
+        if (path[i].timestamp <= ts) idx = i;
         else break;
     }
-    if (idx !== lastIdx) {
-        marker.setLngLat([path[idx].lon, path[idx].lat]);
-        map.flyTo({center: [path[idx].lon, path[idx].lat], zoom: 15, essential: true, duration: 500});
-        updatePathLine(idx);
-        lastIdx = idx;
-    }
+    marker.setLngLat([path[idx].lon, path[idx].lat]);
+    map.flyTo({center: [path[idx].lon, path[idx].lat], zoom: 15, essential: true, duration: 500});
+    updatePathLine(idx);
+    updateLocationsBar(idx);
 };
 
 window.onload = fetchData;
 </script>
-<div style="position: fixed; bottom: 10px; right: 16px; color: #888; font-size: 0.95em; opacity: 0.8; z-index: 999;">
-v1.0.0
-</div>
 </body>
 </html> 
