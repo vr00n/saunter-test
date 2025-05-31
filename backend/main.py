@@ -147,18 +147,19 @@ def play_recording(request: Request, rec_id: str):
 def get_audio(rec_id: str):
     try:
         print(f"Fetching audio for recording {rec_id}")
-        audio_path = f"recordings/{rec_id}.webm"
-        audio_content = get_from_github(audio_path)
-        
-        if audio_content:
-            print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes")
-            audio_io = io.BytesIO(audio_content)
-            audio_io.seek(0)
-            return StreamingResponse(
-                audio_io,
-                media_type='audio/webm;codecs=opus',
-                headers={"Content-Disposition": f"attachment; filename={rec_id}.webm"}
-            )
+        # Try all supported extensions
+        for ext, mime in [("webm", "audio/webm;codecs=opus"), ("mp4", "audio/mp4"), ("wav", "audio/wav")]:
+            audio_path = f"recordings/{rec_id}.{ext}"
+            audio_content = get_from_github(audio_path)
+            if audio_content:
+                print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes and type: {mime}")
+                audio_io = io.BytesIO(audio_content)
+                audio_io.seek(0)
+                return StreamingResponse(
+                    audio_io,
+                    media_type=mime,
+                    headers={"Content-Disposition": f"attachment; filename={rec_id}.{ext}"}
+                )
         print(f"Audio content not found for {rec_id}")
         return JSONResponse(
             {"error": "Audio not found. Please check if the recording exists."}, 
