@@ -5,7 +5,7 @@ import json
 import base64
 import io
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -139,6 +139,8 @@ def list_recordings():
 
 @app.get('/play/{rec_id}', response_class=HTMLResponse)
 def play_recording(request: Request, rec_id: str):
+    if rec_id == "record.html":
+        return RedirectResponse(url="/record.html")
     return templates.TemplateResponse('play.html', {"request": request, "rec_id": rec_id})
 
 @app.get('/audio/{rec_id}')
