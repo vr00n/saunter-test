@@ -73,20 +73,29 @@ def get_from_github(path):
 
 @app.post('/upload_audio')
 async def upload_audio(audio: UploadFile = File(...), locations: str = Form(...)):
-    rec_id = str(uuid.uuid4())
-    audio_path = f"recordings/{rec_id}.webm"
-    loc_path = f"recordings/{rec_id}.json"
-    
-    # Upload audio to GitHub
-    audio_content = await audio.read()
-    if not upload_to_github(audio_content, audio_path):
-        return JSONResponse({"error": "Failed to upload audio"}, status_code=500)
-    
-    # Upload locations to GitHub
-    if not upload_to_github(locations.encode('utf-8'), loc_path):
-        return JSONResponse({"error": "Failed to upload locations"}, status_code=500)
-    
-    return {"link": f"/play/{rec_id}"}
+    try:
+        rec_id = str(uuid.uuid4())
+        audio_path = f"recordings/{rec_id}.webm"
+        loc_path = f"recordings/{rec_id}.json"
+        
+        # Upload audio to GitHub
+        audio_content = await audio.read()
+        print(f"Uploading audio file of size: {len(audio_content)} bytes")
+        if not upload_to_github(audio_content, audio_path):
+            print(f"Failed to upload audio to {audio_path}")
+            return JSONResponse({"error": "Failed to upload audio"}, status_code=500)
+        print(f"Successfully uploaded audio to {audio_path}")
+        
+        # Upload locations to GitHub
+        if not upload_to_github(locations.encode('utf-8'), loc_path):
+            print(f"Failed to upload locations to {loc_path}")
+            return JSONResponse({"error": "Failed to upload locations"}, status_code=500)
+        print(f"Successfully uploaded locations to {loc_path}")
+        
+        return {"link": f"/play/{rec_id}"}
+    except Exception as e:
+        print(f"Error in upload_audio: {str(e)}")
+        return JSONResponse({"error": f"Upload failed: {str(e)}"}, status_code=500)
 
 @app.get('/list_recordings')
 def list_recordings():
@@ -115,25 +124,34 @@ def play_recording(request: Request, rec_id: str):
 @app.get('/audio/{rec_id}')
 def get_audio(rec_id: str):
     try:
+        print(f"Fetching audio for recording {rec_id}")
         audio_content = get_from_github(f"recordings/{rec_id}.webm")
         if audio_content:
+            print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes")
             # Create a BytesIO object and set the position to the beginning
             audio_io = io.BytesIO(audio_content)
             audio_io.seek(0)
             return FileResponse(
                 audio_io,
-                media_type='audio/webm',
+                media_type='audio/webm;codecs=opus',
                 filename=f"{rec_id}.webm"
             )
         print(f"Audio content not found for {rec_id}")
-        return JSONResponse({"error": "Audio not found"}, status_code=404)
+        return JSONResponse({"error": "Audio not found. Please check if the recording exists."}, status_code=404)
     except Exception as e:
-        print(f"Error serving audio: {str(e)}")
+        print(f"Error serving audio for {rec_id}: {str(e)}")
         return JSONResponse({"error": f"Error serving audio: {str(e)}"}, status_code=500)
 
 @app.get('/locations/{rec_id}')
 def get_locations(rec_id: str):
-    locations_content = get_from_github(f"recordings/{rec_id}.json")
-    if locations_content:
-        return JSONResponse(content=locations_content.decode('utf-8'))
-    return JSONResponse({"error": "Locations not found"}, status_code=404)
+    try:
+        print(f"Fetching locations for recording {rec_id}")
+        locations_content = get_from_github(f"recordings/{rec_id}.json")
+        if locations_content:
+            print(f"Successfully retrieved locations content of size: {len(locations_content)} bytes")
+            return JSONResponse(content=locations_content.decode('utf-8'))
+        print(f"Locations content not found for {rec_id}")
+        return JSONResponse({"error": "Locations not found. Please check if the recording exists."}, status_code=404)
+    except Exception as e:
+        print(f"Error serving locations for {rec_id}: {str(e)}")
+        return JSONResponse({"error": f"Error serving locations: {str(e)}"}, status_code=500)
