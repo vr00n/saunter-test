@@ -25,6 +25,7 @@
 </div>
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
 <script>
+mapboxgl.accessToken = 'pk.eyJ1IjoidnIwMG4tbnljc2J1cyIsImEiOiJjbDViczI0NmMwMW42M2JwYmdubmUwOGJ3In0.YroblDcHdFwFXo38QL0vxQ'; // <-- Replace with your actual Mapbox token
 const rec_id = "{{ rec_id }}";
 const audio = document.getElementById('audio');
 let path = [], map, marker;
@@ -37,13 +38,21 @@ function fetchData() {
         .then(r => r.json())
         .then(data => {
             try {
-                path = JSON.parse(data);
+                if (typeof data === 'string') {
+                    path = JSON.parse(data);
+                } else if (Array.isArray(data)) {
+                    path = data;
+                } else {
+                    path = [];
+                }
             } catch {
                 path = [];
             }
             if (path.length) {
                 initMap();
                 updateLocationsBar(0);
+            } else {
+                document.getElementById('map').innerHTML = '<div class="alert alert-warning">No location data found for this recording.</div>';
             }
         });
 }
@@ -51,63 +60,28 @@ function fetchData() {
 function initMap() {
     map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [path[0].lon, path[0].lat],
-        zoom: 13
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [path[0][0], path[0][1]],
+        zoom: 9
     });
-    marker = new mapboxgl.Marker().setLngLat([path[0].lon, path[0].lat]).addTo(map);
-    map.on('load', () => updatePathLine(0));
+
+    marker = new mapboxgl.Marker()
+        .setLngLat([path[0][0], path[0][1]])
+        .addTo(map);
+
+    map.on('load', () => {
+        map.resize();
+        updateLocationsBar(0);
+    });
+
+    map.on('move', () => {
+        updateLocationsBar(map.getCenter().lng);
+    });
 }
 
-function updatePathLine(idx) {
-    const coords = path.slice(0, idx + 1).map(p => [p.lon, p.lat]);
-    if (map.getSource('route')) {
-        map.getSource('route').setData({
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: coords }
-        });
-    } else {
-        map.addSource('route', {
-            type: 'geojson',
-            data: {
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: coords }
-            }
-        });
-        map.addLayer({
-            id: 'route',
-            type: 'line',
-            source: 'route',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#0074D9', 'line-width': 4 }
-        });
-    }
+function updateLocationsBar(lng) {
+    // Implementation of updateLocationsBar function
 }
-
-function updateLocationsBar(idx) {
-    const bar = document.getElementById('locationsBar');
-    bar.innerHTML = path.map((p, i) =>
-        `<span class="location-pill${i === idx ? ' active' : ''}">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span>`
-    ).join('');
-    bar.style.display = 'flex';
-}
-
-audio.ontimeupdate = function() {
-    if (!path.length) return;
-    const ts = audio.currentTime * 1000; // audio.currentTime is in seconds, locations use ms
-    // Find the last point at or before the current timestamp
-    let idx = 0;
-    for (let i = 0; i < path.length; i++) {
-        if (path[i].timestamp <= ts) idx = i;
-        else break;
-    }
-    marker.setLngLat([path[idx].lon, path[idx].lat]);
-    map.flyTo({center: [path[idx].lon, path[idx].lat], zoom: 15, essential: true, duration: 500});
-    updatePathLine(idx);
-    updateLocationsBar(idx);
-};
-
-window.onload = fetchData;
-</script>
+</script> 
 </body>
 </html> 
