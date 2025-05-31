@@ -30,7 +30,7 @@
     </div>
 </div>
 <script>
-const BACKEND_URL = 'https://saunter-test.onrender.com';
+const BACKEND_URL = '';  // Use relative URL
 
 let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [];
 const recordBtn = document.getElementById('recordBtn');
@@ -104,9 +104,8 @@ recordBtn.onclick = async () => {
                 statusDiv.textContent = 'Waiting for server response...';
                 const data = await resp.json();
                 if (data.link) {
-                    // Always use the Render backend URL for playback
                     const recId = data.link.split('/').pop();
-                    statusDiv.innerHTML = `Upload successful! <a href="${BACKEND_URL}/play/${recId}">View Recording</a>`;
+                    statusDiv.innerHTML = `Upload successful! <a href="/play/${recId}">View Recording</a>`;
                     loadRecordings();
                 } else {
                     statusDiv.textContent = 'Upload failed: No link returned.';
@@ -133,9 +132,8 @@ function loadRecordings() {
         }
         list.forEach(r => {
             const a = document.createElement('a');
-            // Always use the Render backend URL for playback
             const recId = r.link.split('/').pop();
-            a.href = `${BACKEND_URL}/play/${recId}`;
+            a.href = `/play/${recId}`;
             a.textContent = r.name;
             a.className = 'recording-link';
             recDiv.appendChild(a);
