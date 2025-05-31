@@ -114,10 +114,22 @@ def play_recording(request: Request, rec_id: str):
 
 @app.get('/audio/{rec_id}')
 def get_audio(rec_id: str):
-    audio_content = get_from_github(f"recordings/{rec_id}.webm")
-    if audio_content:
-        return FileResponse(io.BytesIO(audio_content), media_type='audio/webm')
-    return JSONResponse({"error": "Audio not found or error accessing GitHub"}, status_code=404)
+    try:
+        audio_content = get_from_github(f"recordings/{rec_id}.webm")
+        if audio_content:
+            # Create a BytesIO object and set the position to the beginning
+            audio_io = io.BytesIO(audio_content)
+            audio_io.seek(0)
+            return FileResponse(
+                audio_io,
+                media_type='audio/webm',
+                filename=f"{rec_id}.webm"
+            )
+        print(f"Audio content not found for {rec_id}")
+        return JSONResponse({"error": "Audio not found"}, status_code=404)
+    except Exception as e:
+        print(f"Error serving audio: {str(e)}")
+        return JSONResponse({"error": f"Error serving audio: {str(e)}"}, status_code=500)
 
 @app.get('/locations/{rec_id}')
 def get_locations(rec_id: str):
