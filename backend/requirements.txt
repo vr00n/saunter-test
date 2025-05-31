@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+jinja2
+moviepy
+folium
+selenium
+pillow
+numpy
+python-multipart 
