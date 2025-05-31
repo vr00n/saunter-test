@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from dateutil import parser
 
 # Load environment variables
 load_dotenv()
@@ -124,18 +125,30 @@ def list_recordings():
         "Authorization": f"token {GITHUB_TOKEN}",
     }
     response = requests.get(url, headers=headers)
+    recs = []
     if response.status_code == 200:
         files = response.json()
-        recs = []
         for file in files:
-            if file['name'].endswith('.webm'):
-                rec_id = file['name'][:-5]
+            if file['name'].endswith('.webm') or file['name'].endswith('.mp4') or file['name'].endswith('.wav'):
+                rec_id = file['name'].rsplit('.', 1)[0]
+                # Fetch commit info for timestamp
+                commit_url = file.get('git_url')
+                timestamp = None
+                if commit_url:
+                    commit_resp = requests.get(commit_url, headers=headers)
+                    if commit_resp.status_code == 200:
+                        commit_data = commit_resp.json()
+                        # Use the committer date as the upload timestamp
+                        timestamp_str = commit_data.get('committer', {}).get('date')
+                        if timestamp_str:
+                            dt = parser.isoparse(timestamp_str)
+                            timestamp = int(dt.timestamp() * 1000)  # ms since epoch
                 recs.append({
                     'name': f'Recording {rec_id[:8]}',
-                    'link': f'/play/{rec_id}'
+                    'link': f'/play/{rec_id}',
+                    'timestamp': timestamp
                 })
-        return recs
-    return []
+    return recs
 
 @app.get('/play/{rec_id}', response_class=HTMLResponse)
 def play_recording(request: Request, rec_id: str):
