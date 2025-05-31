@@ -1,10 +1,15 @@
 import os
 import uuid
+import requests
+import json
+import base64
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
+load_dotenv()
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
@@ -15,6 +20,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# GitHub API URL and credentials from environment variables
+GITHUB_API_URL = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_OWNER = os.getenv("GITHUB_OWNER")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
 
 UPLOAD_AUDIO_DIR = 'uploads/audio'
 UPLOAD_LOC_DIR = 'uploads/locations'
