@@ -51,7 +51,7 @@ if (config.backend.overrides[hostname]) {
 // Use the configured backend URL
 const BACKEND_URL = config.backend.url;
 
-let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [];
+let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [], stream = null;
 const recordBtn = document.getElementById('recordBtn');
 const timer = document.getElementById('timer');
 const recInd = document.getElementById('recInd');
@@ -116,7 +116,7 @@ recordBtn.onclick = async () => {
         recording = true;
         timerInt = setInterval(updateTimer, 1000);
         startLocation();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream, {
             mimeType: mimeType,
             audioBitsPerSecond: 128000
@@ -139,8 +139,15 @@ recordBtn.onclick = async () => {
             recording = false;
             statusDiv.textContent = 'Recording stopped. Preparing upload...';
             // Stop all tracks in the stream
-            stream.getTracks().forEach(track => track.stop());
-            // Upload
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            // Upload only if there is data
+            if (audioChunks.length === 0) {
+                statusDiv.textContent = 'No audio data recorded.';
+                cleanupRecording();
+                return;
+            }
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log('Audio blob size:', audioBlob.size);
             const formData = new FormData();
@@ -165,6 +172,7 @@ recordBtn.onclick = async () => {
                 console.error('Upload error:', err);
                 statusDiv.textContent = 'Upload failed: ' + (err.message || err);
             }
+            cleanupRecording();
         };
         mediaRecorder.start(1000); // Collect data every second
     } else {
@@ -175,9 +183,19 @@ recordBtn.onclick = async () => {
         } catch (err) {
             console.error('Error stopping MediaRecorder:', err);
             statusDiv.textContent = 'Error stopping recording: ' + (err.message || err);
+            cleanupRecording();
         }
     }
 };
+
+function cleanupRecording() {
+    mediaRecorder = null;
+    audioChunks = [];
+    stream = null;
+    seconds = 0;
+    timer.textContent = '00:00';
+    recording = false;
+}
 
 function loadRecordings() {
     fetch(`${BACKEND_URL}/list_recordings`).then(r => r.json()).then(list => {
