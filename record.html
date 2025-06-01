@@ -69,7 +69,13 @@ function startLocation() {
     if (navigator.geolocation) {
         geoWatchId = navigator.geolocation.watchPosition(pos => {
             const now = Date.now();
-            if (!locations.length || locations[locations.length - 1].timestamp !== now) {
+            const last = locations[locations.length - 1];
+            if (
+                !last ||
+                last.timestamp !== now ||
+                last.lat !== pos.coords.latitude ||
+                last.lon !== pos.coords.longitude
+            ) {
                 locations.push({
                     timestamp: now,
                     lat: pos.coords.latitude,
