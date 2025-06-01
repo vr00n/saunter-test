@@ -51,7 +51,7 @@ if (config.backend.overrides[hostname]) {
 // Use the configured backend URL
 const BACKEND_URL = config.backend.url;
 
-let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoInt, locations = [], stream = null;
+let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoWatchId, locations = [], stream = null;
 const recordBtn = document.getElementById('recordBtn');
 const timer = document.getElementById('timer');
 const recInd = document.getElementById('recInd');
@@ -66,21 +66,25 @@ function updateTimer() {
 
 function startLocation() {
     locations = [];
-    geoInt = setInterval(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
+    if (navigator.geolocation) {
+        geoWatchId = navigator.geolocation.watchPosition(pos => {
+            const now = Date.now();
+            if (!locations.length || locations[locations.length - 1].timestamp !== now) {
                 locations.push({
-                    timestamp: Date.now(),
+                    timestamp: now,
                     lat: pos.coords.latitude,
                     lon: pos.coords.longitude
                 });
-            });
-        }
-    }, 2000);
+            }
+        }, null, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+    }
 }
 
 function stopLocation() {
-    clearInterval(geoInt);
+    if (geoWatchId !== null) {
+        navigator.geolocation.clearWatch(geoWatchId);
+        geoWatchId = null;
+    }
 }
 
 recordBtn.onclick = async () => {
