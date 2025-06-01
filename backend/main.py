@@ -64,28 +64,25 @@ def get_from_github(path):
         print(f"Fetching from GitHub: {path}")
         response = requests.get(url, headers=headers)
         print(f"GitHub API response status: {response.status_code}")
-        
         if response.status_code == 200:
-            try:
-                content_data = response.json()
-                if 'content' not in content_data:
-                    print(f"No content field in GitHub response: {content_data}")
-                    return None
-                    
-                # GitHub API returns content in base64, but it might be encoded with newlines
+            content_data = response.json()
+            # If content is present, decode as before
+            if 'content' in content_data and content_data['content']:
                 content = content_data['content'].replace('\n', '')
                 print(f"Decoding base64 content of length: {len(content)}")
                 decoded_content = base64.b64decode(content)
                 print(f"Successfully decoded content of size: {len(decoded_content)} bytes")
                 return decoded_content
-            except json.JSONDecodeError as e:
-                print(f"Failed to parse GitHub response as JSON: {str(e)}")
-                print(f"Response text: {response.text[:200]}...")  # Print first 200 chars
-                return None
-            except base64.binascii.Error as e:
-                print(f"Failed to decode base64 content: {str(e)}")
-                return None
-                
+            # If content is null, use download_url
+            elif 'download_url' in content_data and content_data['download_url']:
+                print("Content too large for API, using download_url")
+                raw_resp = requests.get(content_data['download_url'])
+                if raw_resp.status_code == 200:
+                    print(f"Successfully fetched raw content of size: {len(raw_resp.content)} bytes")
+                    return raw_resp.content
+                else:
+                    print(f"Failed to fetch raw content: {raw_resp.status_code}")
+                    return None
         print(f"GitHub API error: {response.status_code} - {response.text}")
         return None
     except Exception as e:
