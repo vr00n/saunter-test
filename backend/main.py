@@ -152,7 +152,7 @@ def list_recordings():
     if response.status_code == 200:
         files = response.json()
         for file in files:
-            if file['name'].endswith('.webm'):
+            if file['name'].endswith('.mp3'):
                 rec_id = file['name'].rsplit('.', 1)[0]
                 # Fetch commit info for timestamp
                 commit_url = file.get('git_url')
