@@ -55,7 +55,7 @@ if (config.backend.overrides[hostname]) {
 const BACKEND_URL = config.backend.url;
 
 let mediaRecorder, audioChunks = [], recording = false, timerInt, seconds = 0, geoWatchId, locations = [], stream = null;
-let liveMap, liveMarker;
+let liveMap, liveMarker, liveMapLoaded = false;
 const recordBtn = document.getElementById('recordBtn');
 const timer = document.getElementById('timer');
 const recInd = document.getElementById('recInd');
@@ -105,6 +105,7 @@ function stopLocation() {
 
 function initLiveMap(lat, lon) {
     mapboxgl.accessToken = 'pk.eyJ1IjoidnIwMG4tbnljc2J1cyIsImEiOiJjbDViczI0NmMwMW42M2JwYmdubmUwOGJ3In0.YroblDcHdFwFXo38QL0vxQ';
+    liveMapLoaded = false;
     liveMap = new mapboxgl.Map({
         container: 'liveMap',
         style: 'mapbox://styles/mapbox/streets-v12',
@@ -112,11 +113,14 @@ function initLiveMap(lat, lon) {
         zoom: 15
     });
     liveMarker = new mapboxgl.Marker().setLngLat([lon, lat]).addTo(liveMap);
-    liveMap.on('load', () => updateLivePathLine());
+    liveMap.on('load', () => {
+        liveMapLoaded = true;
+        updateLivePathLine();
+    });
 }
 
 function updateLivePathLine() {
-    if (!liveMap || !locations.length) return;
+    if (!liveMap || !liveMapLoaded || !locations.length) return;
     const coords = locations.map(p => [p.lon, p.lat]);
     if (liveMap.getSource('route')) {
         liveMap.getSource('route').setData({
