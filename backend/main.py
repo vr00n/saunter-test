@@ -10,6 +10,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from dateutil import parser
+import tempfile
+import subprocess
 
 # Load environment variables
 load_dotenv()
@@ -93,23 +95,47 @@ def get_from_github(path):
 async def upload_audio(audio: UploadFile = File(...), locations: str = Form(...)):
     try:
         rec_id = str(uuid.uuid4())
-        audio_path = f"recordings/{rec_id}.webm"
+        mp3_path = f"recordings/{rec_id}.mp3"
         loc_path = f"recordings/{rec_id}.json"
-        
-        # Upload audio to GitHub
+
+        # Save uploaded .webm to a temp file
         audio_content = await audio.read()
         print(f"Uploading audio file of size: {len(audio_content)} bytes")
-        if not upload_to_github(audio_content, audio_path):
-            print(f"Failed to upload audio to {audio_path}")
-            return JSONResponse({"error": "Failed to upload audio"}, status_code=500)
-        print(f"Successfully uploaded audio to {audio_path}")
-        
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_webm:
+            temp_webm.write(audio_content)
+            temp_webm_path = temp_webm.name
+
+        # Transcode .webm to .mp3 using FFmpeg
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_mp3:
+            temp_mp3_path = temp_mp3.name
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-i', temp_webm_path, '-vn', '-ar', '44100', '-ac', '2', '-b:a', '192k', temp_mp3_path
+        ]
+        print(f"Running FFmpeg: {' '.join(ffmpeg_cmd)}")
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr.decode()}")
+            return JSONResponse({"error": "Audio transcoding failed."}, status_code=500)
+        with open(temp_mp3_path, 'rb') as f:
+            mp3_content = f.read()
+        print(f"Transcoded MP3 size: {len(mp3_content)} bytes")
+
+        # Upload mp3 to GitHub
+        if not upload_to_github(mp3_content, mp3_path):
+            print(f"Failed to upload mp3 to {mp3_path}")
+            return JSONResponse({"error": "Failed to upload mp3"}, status_code=500)
+        print(f"Successfully uploaded mp3 to {mp3_path}")
+
         # Upload locations to GitHub
         if not upload_to_github(locations.encode('utf-8'), loc_path):
             print(f"Failed to upload locations to {loc_path}")
             return JSONResponse({"error": "Failed to upload locations"}, status_code=500)
         print(f"Successfully uploaded locations to {loc_path}")
-        
+
+        # Clean up temp files
+        os.remove(temp_webm_path)
+        os.remove(temp_mp3_path)
+
         return {"link": f"/play/{rec_id}"}
     except Exception as e:
         print(f"Error in upload_audio: {str(e)}")
@@ -157,16 +183,16 @@ def play_recording(request: Request, rec_id: str):
 def get_audio(rec_id: str):
     try:
         print(f"Fetching audio for recording {rec_id}")
-        audio_path = f"recordings/{rec_id}.webm"
+        audio_path = f"recordings/{rec_id}.mp3"
         audio_content = get_from_github(audio_path)
         if audio_content:
-            print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes and type: audio/webm;codecs=opus")
+            print(f"Successfully retrieved audio content of size: {len(audio_content)} bytes and type: audio/mpeg")
             audio_io = io.BytesIO(audio_content)
             audio_io.seek(0)
             return StreamingResponse(
                 audio_io,
-                media_type='audio/webm;codecs=opus',
-                headers={"Content-Disposition": f"attachment; filename={rec_id}.webm"}
+                media_type='audio/mpeg',
+                headers={"Content-Disposition": f"attachment; filename={rec_id}.mp3"}
             )
         print(f"Audio content not found for {rec_id}")
         return JSONResponse(
