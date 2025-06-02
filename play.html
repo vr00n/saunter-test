@@ -56,22 +56,13 @@ function initMap() {
         zoom: 15
     });
     marker = new mapboxgl.Marker().setLngLat([path[0].lon, path[0].lat]).addTo(map);
-    map.on('load', () => updatePathLine(0));
-}
-
-function updatePathLine(idx) {
-    const coords = path.slice(0, idx + 1).map(p => [p.lon, p.lat]);
-    if (map.getSource('route')) {
-        map.getSource('route').setData({
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: coords }
-        });
-    } else {
+    map.on('load', () => {
+        // Draw the full path once
         map.addSource('route', {
             type: 'geojson',
             data: {
                 type: 'Feature',
-                geometry: { type: 'LineString', coordinates: coords }
+                geometry: { type: 'LineString', coordinates: path.map(p => [p.lon, p.lat]) }
             }
         });
         map.addLayer({
@@ -81,7 +72,7 @@ function updatePathLine(idx) {
             layout: { 'line-join': 'round', 'line-cap': 'round' },
             paint: { 'line-color': '#0074D9', 'line-width': 4 }
         });
-    }
+    });
 }
 
 audio.ontimeupdate = function() {
@@ -95,9 +86,8 @@ audio.ontimeupdate = function() {
     }
     if (path[idx]) {
         marker.setLngLat([path[idx].lon, path[idx].lat]);
-        map.flyTo({center: [path[idx].lon, path[idx].lat], zoom: 15, essential: true, duration: 500});
-        updatePathLine(idx);
-        updateLocationsBar(idx);
+        // Optionally, pan/fly the map to the marker:
+        // map.flyTo({center: [path[idx].lon, path[idx].lat], zoom: 15, essential: true, duration: 500});
     }
 };
 
