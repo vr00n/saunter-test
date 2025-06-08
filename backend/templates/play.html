@@ -55,7 +55,7 @@ function initMap() {
         center: [path[0].lon, path[0].lat],
         zoom: 17,
         pitch: 60,
-        bearing: -20
+        bearing: 0
     });
     marker = new mapboxgl.Marker().setLngLat([path[0].lon, path[0].lat]).addTo(map);
     map.on('load', () => {
@@ -115,7 +115,7 @@ audio.ontimeupdate = function() {
             center: [path[idx].lon, path[idx].lat],
             zoom: 17,
             pitch: 60,
-            bearing: -20,
+            bearing: 0,
             duration: 500
         });
     }
